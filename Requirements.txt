@@ -1,3 +1,6 @@
+os
+json
+cour
 Flask
 google-genai
 gunicorn
