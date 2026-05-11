@@ -1,5 +1,3 @@
-json
-CORS
 Flask
 google-genai
-gunicorn
+gunicorn 
