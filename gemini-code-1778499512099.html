@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CamPrep AI — Gemini Edition</title>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0e0e10;
+            --surface: #1e1e21;
+            --surface-hover: #2b2b2f;
+            --primary: #4ade80; 
+            --secondary: #fbbf24; 
+            --accent: #ef4444; 
+            --text: #e2e8f0;
+            --text-dim: #94a3b8;
+            --border: #333338;
+        }
+
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 280px;
+            background-color: #171719;
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+        }
+
+        .logo { font-size: 1.5rem; font-weight: 700; margin-bottom: 2rem; display: flex; align-items: center; gap: 10px; }
+        .nav-item { padding: 12px 16px; border-radius: 8px; cursor: pointer; transition: 0.2s; margin-bottom: 4px; color: var(--text-dim); }
+        .nav-item.active { background: var(--surface); color: white; }
+        .exam-label { font-size: 0.75rem; color: var(--text-dim); margin-top: 20px; text-transform: uppercase; letter-spacing: 1px; }
+        
+        .exam-select, .auth-input {
+            background: var(--bg); border: 1px solid var(--border); color: white;
+            padding: 10px; border-radius: 8px; width: 100%; margin-top: 8px;
+        }
+
+        /* Auth Modal */
+        #auth-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); backdrop-filter: blur(8px);
+            display: flex; justify-content: center; align-items: center; z-index: 1000;
+        }
+
+        .auth-card {
+            background: var(--surface); padding: 40px; border-radius: 24px;
+            width: 100%; max-width: 400px; border: 1px solid var(--border); text-align: center;
+        }
+
+        /* Main Content */
+        .main-container { flex: 1; display: flex; flex-direction: column; overflow-y: auto; }
+        .header { padding: 20px 40px; display: flex; justify-content: space-between; align-items: center; }
+        .content-area { max-width: 800px; margin: 0 auto; width: 100%; padding: 20px; }
+
+        .ai-response { background: var(--surface); border-radius: 16px; padding: 24px; margin-bottom: 24px; border: 1px solid var(--border); }
+        .quiz-card { border: 1px solid var(--border); border-radius: 16px; padding: 24px; margin-top: 12px; }
+        
+        .option-btn {
+            display: block; width: 100%; text-align: left; background: transparent;
+            border: 1px solid var(--border); color: var(--text); padding: 14px;
+            margin: 10px 0; border-radius: 10px; cursor: pointer;
+        }
+
+        .btn-primary {
+            background: var(--primary); color: #000; border: none;
+            padding: 14px 32px; border-radius: 24px; font-weight: 600;
+            cursor: pointer; width: 100%; margin-top: 15px;
+        }
+
+        .xp-badge { background: linear-gradient(45deg, var(--secondary), var(--accent)); color: black; padding: 6px 16px; border-radius: 20px; font-weight: bold; }
+        .loading-spinner { display: none; text-align: center; color: var(--primary); margin: 20px 0; }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <div id="auth-overlay">
+        <div class="auth-card">
+            <h2 id="auth-title">Welcome to CamPrep</h2>
+            <p style="color: var(--text-dim); margin-bottom: 20px;" id="auth-subtitle">Enter your username to begin.</p>
+            <input type="text" id="username-field" class="auth-input" placeholder="Username (e.g., Amadou237)">
+            <button class="btn-primary" onclick="handleAuth()">Continue</button>
+            <p style="margin-top: 20px; font-size: 0.8rem; color: var(--text-dim); cursor: pointer;" onclick="toggleAuthMode()" id="auth-toggle">
+                Need an account? Sign Up
+            </p>
+        </div>
+    </div>
+
+    <aside class="sidebar">
+        <div class="logo"><span style="color:var(--primary)">●</span> CamPrep AI</div>
+        <div class="nav-item active">Practice</div>
+        <div id="user-display-name" style="font-size: 0.9rem; color: var(--primary); margin-bottom: 10px;"></div>
+        
+        <div class="exam-label">Select Exam</div>
+        <select id="exam-level" class="exam-select" onchange="updateSubjects()">
+            <option value="GCE A-Level">GCE A-Level</option>
+            <option value="GCE O-Level">GCE O-Level</option>
+            <option value="Baccalauréat">Baccalauréat</option>
+            <option value="Probatoire">Probatoire</option>
+            <option value="BEPC">BEPC</option>
+            <option value="CAP">CAP</option>
+        </select>
+
+        <div class="exam-label">Subject</div>
+        <select id="subject-select" class="exam-select"></select>
+        
+        <button onclick="logout()" style="margin-top: auto; background: none; border: 1px solid var(--border); color: var(--accent); padding: 8px; border-radius: 8px; cursor: pointer;">Logout</button>
+    </aside>
+
+    <main class="main-container">
+        <header class="header">
+            <h2 id="current-subject-display">Practice</h2>
+            <div class="xp-badge" id="user-xp">XP: 0</div>
+        </header>
+
+        <div class="content-area">
+            <div class="ai-response" id="explanation-box">Practice makes perfect. Enter a topic below.</div>
+            <input type="text" id="topic-input" class="auth-input" placeholder="Enter topic (e.g., Cell Biology)...">
+            <button class="btn-primary" onclick="generateQuestions()">Generate Study Set</button>
+            <div id="loading" class="loading-spinner">✨ AI is curating your questions...</div>
+            <div id="quiz-container"></div>
+        </div>
+    </main>
+
+    <script>
+        const API_BASE = "http://localhost:5000/api"; 
+        let currentUsername = localStorage.getItem('camprep_user');
+        let isSignUp = false;
+
+        const subjectsMap = {
+            "GCE A-Level": ["Biology", "Chemistry", "Physics", "Pure Maths"],
+            "GCE O-Level": ["Biology", "Mathematics", "English"],
+            "Baccalauréat": ["Mathématiques", "Physique", "SVT"],
+            "Probatoire": ["Mathématiques", "Français", "ECM"],
+            "BEPC": ["Mathématiques", "Français"],
+            "CAP": ["Dessin Technique", "Sciences Physiques"]
+        };
+
+        // --- Auth Logic ---
+        function toggleAuthMode() {
+            isSignUp = !isSignUp;
+            document.getElementById('auth-title').innerText = isSignUp ? "Create Account" : "Welcome Back";
+            document.getElementById('auth-toggle').innerText = isSignUp ? "Already have an account? Login" : "Need an account? Sign Up";
+        }
+
+        async function handleAuth() {
+            const username = document.getElementById('username-field').value.trim();
+            if(!username) return alert("Username required");
+
+            const endpoint = isSignUp ? "/register" : "/login";
+            try {
+                const res = await fetch(`${API_BASE}${endpoint}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ username })
+                });
+                const data = await res.json();
+                
+                if(data.error) throw new Error(data.error);
+
+                localStorage.setItem('camprep_user', username);
+                currentUsername = username;
+                document.getElementById('auth-overlay').classList.add('hidden');
+                document.getElementById('user-display-name').innerText = `User: ${username}`;
+                document.getElementById('user-xp').innerText = `XP: ${data.xp || 0}`;
+            } catch (err) {
+                alert(err.message);
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('camprep_user');
+            location.reload();
+        }
+
+        // --- App Logic ---
+        function updateSubjects() {
+            const exam = document.getElementById('exam-level').value;
+            const subjects = subjectsMap[exam] || [];
+            document.getElementById('subject-select').innerHTML = subjects.map(s => `<option value="${s}">${s}</option>`).join('');
+        }
+
+        async function generateQuestions() {
+            const topic = document.getElementById('topic-input').value;
+            if(!topic) return alert("Enter a topic");
+            
+            document.getElementById('loading').style.display = "block";
+            try {
+                const res = await fetch(`${API_BASE}/generate-questions`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ 
+                        exam: document.getElementById('exam-level').value,
+                        subject: document.getElementById('subject-select').value,
+                        topic 
+                    })
+                });
+                const data = await res.json();
+                document.getElementById('explanation-box').innerHTML = data.explanation;
+                renderQuiz(data.questions);
+            } finally {
+                document.getElementById('loading').style.display = "none";
+            }
+        }
+
+        function renderQuiz(questions) {
+            const container = document.getElementById('quiz-container');
+            container.innerHTML = questions.map((q, idx) => `
+                <div class="quiz-card">
+                    <p>${q.question}</p>
+                    ${q.options.map((opt, i) => `<button class="option-btn" onclick="checkAnswer(this, ${i}, ${q.answer})">${opt}</button>`).join('')}
+                </div>
+            `).join('');
+        }
+
+        async function checkAnswer(btn, selected, correct) {
+            if (selected === correct) {
+                btn.style.borderColor = "var(--primary)";
+                const res = await fetch(`${API_BASE}/update-xp`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ username: currentUsername, xp_gain: 10 })
+                });
+                const data = await res.json();
+                document.getElementById('user-xp').innerText = `XP: ${data.total_xp}`;
+            } else {
+                btn.style.borderColor = "var(--accent)";
+            }
+        }
+
+        window.onload = () => {
+            if(currentUsername) {
+                document.getElementById('auth-overlay').classList.add('hidden');
+                handleAuth(); // Refresh XP and user status
+            }
+            updateSubjects();
+        };
+    </script>
+</body>
+</html>
