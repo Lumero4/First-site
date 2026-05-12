@@ -7,22 +7,59 @@ from google import genai
 app = Flask(__name__)
 CORS(app)
 
-# Replace with your actual Gemini API Key
+# API Key configuration
 API_KEY = "AIzaSyBtl-Wh7ifJcGpYNlYl9M8rPf56yU_zOE8" 
 client = genai.Client(api_key=API_KEY)
 MODEL_ID = "gemini-2.0-flash" 
-DB_FILE = 'users_db.json'
+
+# Absolute path for the DB ensures it persists correctly on Render
+DB_FILE = os.path.join(os.getcwd(), 'users_db.json')
 
 def load_db():
     if os.path.exists(DB_FILE):
         with open(DB_FILE, 'r') as f:
-            try: return json.load(f)
-            except: return {"users": {"Mbianda J.": {"xp": 850}}}
-    return {"users": {"Mbianda J.": {"xp": 850}}}
+            try: 
+                return json.load(f)
+            except: 
+                return {"users": {}}
+    return {"users": {}}
 
 def save_db(data):
     with open(DB_FILE, 'w') as f:
         json.dump(data, f, indent=4)
+
+@app.route('/api/register', methods=['POST'])
+def register():
+    data = request.json
+    username = data.get('username', '').strip()
+    if not username:
+        return jsonify({"error": "Username required"}), 400
+    
+    db = load_db()
+    if username in db['users']:
+        return jsonify({"error": "User already exists"}), 400
+    
+    # Initialize new user with 0 XP
+    db['users'][username] = {
+        "xp": 0,
+        "history": []
+    }
+    save_db(db)
+    return jsonify({"status": "success", "xp": 0})
+
+@app.route('/api/login', methods=['POST'])
+def login():
+    data = request.json
+    username = data.get('username', '').strip()
+    db = load_db()
+    
+    if username not in db['users']:
+        return jsonify({"error": "User not found"}), 404
+    
+    return jsonify({
+        "status": "success", 
+        "xp": db['users'][username].get('xp', 0)
+    })
 
 @app.route('/api/generate-questions', methods=['POST'])
 def generate_questions():
@@ -66,16 +103,17 @@ def generate_questions():
 @app.route('/api/update-xp', methods=['POST'])
 def update_xp():
     data = request.json
-    username = data.get('username', 'Mbianda J.')
+    username = data.get('username')
     gain = data.get('xp_gain', 0)
     
     db = load_db()
-    if username not in db['users']:
-        db['users'][username] = {"xp": 0}
-    
-    db['users'][username]['xp'] += gain
-    save_db(db)
-    return jsonify({"status": "success", "total_xp": db['users'][username]['xp']})
+    if username in db['users']:
+        db['users'][username]['xp'] += gain
+        save_db(db)
+        return jsonify({"status": "success", "total_xp": db['users'][username]['xp']})
+    return jsonify({"error": "User not found"}), 404
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    # Port configuration for Render
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)
